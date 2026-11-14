@@ -14,6 +14,7 @@
   <a href="#界面预览">界面预览</a> ·
   <a href="#快速启动">快速启动</a> ·
   <a href="#系统架构">系统架构</a> ·
+  <a href="#技术栈">技术栈</a> ·
   <a href="#实现细节">实现细节</a> ·
   <a href="#项目文档">项目文档</a>
 </p>
@@ -79,14 +80,18 @@ flowchart LR
     P --> D["DeepSeek · 回答生成"]
 ```
 
-| 模块 | 职责 |
-| --- | --- |
-| [React / Vite](frontend/) | 用户对话、知识库浏览、管理仪表盘和 Agent 运行详情 |
-| [Java 21 / Spring Boot](src/main/) | 登录与权限校验、会话和文档管理、请求去重、审计与统计 |
-| [Python 3.11 / FastAPI](python-service/) | 解析和切分文档，用 BGE 生成 Embedding，检索 FAISS 并执行问答 |
-| [Nginx / Docker Compose](docker-compose.yml) | 提供本地访问入口，通过命名卷保存 MySQL 数据、上传文件、索引和模型缓存 |
-
 当前交付形态为本机 Docker Compose，默认只通过 `127.0.0.1:8080` 暴露 Nginx。浏览器使用同步问答接口。
+
+## 技术栈
+
+| 层级 | 使用技术 | 在 DocTrail 中的用途 |
+| --- | --- | --- |
+| [前端](frontend/) | JavaScript、React 19、React Router、Vite 8、Axios | 构建用户端和管理端，处理页面路由与 API 请求 |
+| [Java 业务服务](pom.xml) | Java 21、Spring Boot 3.5、Spring Security、MyBatis-Plus、Flyway | 处理登录与权限、对话和文档管理、运行审计与统计，管理数据库结构迁移 |
+| [Python AI 服务](python-service/pyproject.toml) | Python 3.11、FastAPI、LangChain | 提供内部 HTTP API，切分文档、编排问答步骤并调用模型 |
+| [向量检索与回答生成](python-service/) | BAAI/bge-small-zh-v1.5、FAISS、DeepSeek | 用本地 Embedding 模型生成向量，由 FAISS 检索文档片段，再交给 DeepSeek 生成回答 |
+| [数据存储](docker-compose.yml) | MySQL 8.4、Redis 8.2、本地文件系统 | MySQL 保存文档元数据、聊天消息和审计记录，Redis 管理登录会话，上传文件与向量索引保存在本地 |
+| [本地交付](docker-compose.yml) | Nginx、Docker Compose | Nginx 提供静态页面和 API 反向代理，Compose 启动各服务并通过命名卷保存数据 |
 
 ## 实现细节
 
