@@ -1,0 +1,12 @@
+{
+  "backend": "faiss",
+  "index_build_id": "c6e0f85a-4a4c-4e55-a5ca-0f8f0d4ac5b8",
+  "embedding_model": "BAAI/bge-small-zh-v1.5",
+  "dimension": 512,
+  "normalized": true,
+  "chunk_count": 12,
+  "active_chunk_digest": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+  "created_at": "2026-10-15T02:00:00Z",
+  "ready": true,
+  "trace_id": "15fcdb04-b282-4c39-a51d-4fb7f948b43c"
+}

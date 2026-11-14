@@ -1,0 +1,4 @@
+.knowledge-page .page-actions { display: flex; align-items: center; gap: 10px; }
+.knowledge-page .document-cell { min-width: 245px; max-width: 420px; white-space: normal; overflow-wrap: anywhere; }
+.knowledge-page .failure-reason { max-width: 100%; white-space: normal; overflow-wrap: anywhere; color: #a05c46; font-size: 11px; line-height: 1.8; }
+.knowledge-page .table-hint { color: #747e68; font-size: 11px; }

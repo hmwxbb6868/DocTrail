@@ -1,0 +1,56 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Python
+.python-runtime/
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Java
+target/
+*.class
+
+# Node
+node_modules/
+frontend/dist/
+frontend/playwright-report/
+frontend/test-results/
+
+# Runtime data and models
+uploads/
+faiss_index/
+legacy-indexes/
+*.faiss
+legacy_sources.json
+legacy_rebuild_report.json
+build-*/
+active.pointer
+qdrant_data/
+qdrant_snapshots/
+model-cache/
+logs/
+*.log
+
+# Local legacy data must never enter the public repository
+sql/init.sql
+*legacy*.sql
+*legacy*.dump
+*legacy*.bak
+
+# IDE and OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+记录.txt
+面试问题.txt

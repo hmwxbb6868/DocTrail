@@ -1,0 +1,8 @@
+{
+  "code": 1,
+  "msg": "success",
+  "data": {
+    "accessToken": "stage1-mock-access-token",
+    "mock": true
+  }
+}

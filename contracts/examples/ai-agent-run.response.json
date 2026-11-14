@@ -1,0 +1,9 @@
+{
+  "request_id": "8cc63b60-29fa-44b5-91bf-aa29b8ad0ab1",
+  "run_id": "882b535f-36fe-4ab7-8468-e229674efa47",
+  "trace_id": "15fcdb04-b282-4c39-a51d-4fb7f948b43c",
+  "conversation_id": 123,
+  "user_id": null,
+  "task_type": "knowledge_qa",
+  "status": "COMPLETED"
+}

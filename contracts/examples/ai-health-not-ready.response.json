@@ -1,0 +1,13 @@
+{
+  "status": "NOT_READY",
+  "service": "doctrail-python",
+  "timestamp": "2026-09-20T03:00:00Z",
+  "mock": true,
+  "checks": [
+    {
+      "name": "contract_stub",
+      "status": "DOWN",
+      "detail": "Stage 1 contract stub is not ready."
+    }
+  ]
+}

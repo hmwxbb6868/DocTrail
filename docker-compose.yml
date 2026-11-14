@@ -1,0 +1,258 @@
+name: doctrail
+
+services:
+  mysql:
+    image: mysql:8.4.13
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:?Set MYSQL_DATABASE in .env}
+      MYSQL_USER: ${MYSQL_USERNAME:?Set MYSQL_USERNAME in .env}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in .env}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - doctrail_private
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - MYSQL_PWD="$${MYSQL_ROOT_PASSWORD}" mysqladmin ping --host=127.0.0.1 --user=root --silent
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  redis:
+    image: redis:8.2.11-bookworm
+    restart: unless-stopped
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
+    command:
+      - sh
+      - -ec
+      - exec redis-server --appendonly yes --requirepass "$$REDIS_PASSWORD"
+    networks:
+      - doctrail_private
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - REDISCLI_AUTH="$${REDIS_PASSWORD}" redis-cli --no-auth-warning ping | grep -qx PONG
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 5s
+
+  data-volume-init:
+    image: doctrail-python:local
+    pull_policy: never
+    user: "0:0"
+    command:
+      - sh
+      - -ec
+      - >-
+        chown 10001:10001 /data/uploads /data/faiss;
+        chmod 0770 /data/uploads /data/faiss;
+        test "$$(stat -c '%u:%g' /data/uploads)" = "10001:10001";
+        test "$$(stat -c '%u:%g' /data/faiss)" = "10001:10001"
+    volumes:
+      - uploads_data:/data/uploads
+      - faiss_data:/data/faiss
+    networks:
+      - doctrail_private
+    restart: "no"
+
+  model-cache-init:
+    image: doctrail-python:local
+    pull_policy: never
+    user: "0:0"
+    command:
+      - python
+      - /app/scripts/init_model_cache.py
+      - --source-root
+      - /seed
+      - --target-root
+      - /data/model-cache
+    volumes:
+      - ./model-cache:/seed:ro
+      - model_cache:/data/model-cache
+    networks:
+      - doctrail_private
+    restart: "no"
+
+  python-service:
+    image: doctrail-python:local
+    build:
+      context: .
+      dockerfile: Dockerfile.python
+    user: "10001:10001"
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      data-volume-init:
+        condition: service_completed_successfully
+      model-cache-init:
+        condition: service_completed_successfully
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PORT: "3306"
+      MYSQL_DATABASE: ${MYSQL_DATABASE:?Set MYSQL_DATABASE in .env}
+      MYSQL_USERNAME: ${MYSQL_USERNAME:?Set MYSQL_USERNAME in .env}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in .env}
+      API_HOST: 0.0.0.0
+      API_PORT: "8000"
+      UPLOAD_ROOT: /data/uploads
+      VECTOR_STORE_PERSIST_DIR: /data/faiss
+      MODEL_CACHE_DIR: /data/model-cache
+      LOCAL_EMBEDDING_MODEL: BAAI/bge-small-zh-v1.5
+      EMBEDDING_DIMENSION: "512"
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+      HF_HUB_DISABLE_TELEMETRY: "1"
+      STORAGE_BACKEND: local
+      OSS_KEY_PREFIX: doctrail
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:?Set INTERNAL_TOKEN in .env}
+      LLM_PROVIDER: deepseek
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:?Set DEEPSEEK_API_KEY in .env}
+      DEEPSEEK_MODEL: ${DEEPSEEK_MODEL:-deepseek-chat}
+      DEEPSEEK_BASE_URL: ${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
+      LLM_CONNECT_TIMEOUT_SECONDS: ${LLM_CONNECT_TIMEOUT_SECONDS:-10}
+      LLM_READ_TIMEOUT_SECONDS: ${LLM_READ_TIMEOUT_SECONDS:-90}
+    volumes:
+      - uploads_data:/data/uploads:ro
+      - faiss_data:/data/faiss
+      - model_cache:/data/model-cache:ro
+    networks:
+      - doctrail_private
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import json, urllib.request;
+          data=json.load(urllib.request.urlopen('http://127.0.0.1:8000/health/live', timeout=3));
+          assert data['status']=='UP' and data['mock'] is False
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  auth-bootstrap:
+    image: doctrail-java:local
+    pull_policy: never
+    user: "10001:10001"
+    restart: "no"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: stage2-auth-bootstrap
+      MYSQL_HOST: mysql
+      MYSQL_PORT: "3306"
+      MYSQL_DATABASE: ${MYSQL_DATABASE:?Set MYSQL_DATABASE in .env}
+      MYSQL_USERNAME: ${MYSQL_USERNAME:?Set MYSQL_USERNAME in .env}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in .env}
+      AUTH_BOOTSTRAP_REQUIRED: "true"
+      DEMO_USERNAME: ${DEMO_USERNAME:?Set DEMO_USERNAME in .env}
+      DEMO_PASSWORD: ${DEMO_PASSWORD:?Set DEMO_PASSWORD in .env}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:?Set ADMIN_USERNAME in .env}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env}
+    networks:
+      - doctrail_private
+
+  python-ready:
+    image: doctrail-python:local
+    pull_policy: never
+    user: "10001:10001"
+    restart: "no"
+    depends_on:
+      python-service:
+        condition: service_healthy
+    environment:
+      PYTHON_READY_TIMEOUT_SECONDS: ${PYTHON_READY_TIMEOUT_SECONDS:-600}
+    command:
+      - python
+      - /app/scripts/wait_for_readiness.py
+    networks:
+      - doctrail_private
+
+  java:
+    image: doctrail-java:local
+    build:
+      context: .
+      dockerfile: Dockerfile.java
+    user: "10001:10001"
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      data-volume-init:
+        condition: service_completed_successfully
+      auth-bootstrap:
+        condition: service_completed_successfully
+      python-ready:
+        condition: service_completed_successfully
+    environment:
+      SPRING_PROFILES_ACTIVE: stage2-auth
+      JAVA_SERVER_PORT: "8080"
+      MYSQL_HOST: mysql
+      MYSQL_PORT: "3306"
+      MYSQL_DATABASE: ${MYSQL_DATABASE:?Set MYSQL_DATABASE in .env}
+      MYSQL_USERNAME: ${MYSQL_USERNAME:?Set MYSQL_USERNAME in .env}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in .env}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
+      AI_SERVICE_BASE_URL: http://python-service:8000
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:?Set INTERNAL_TOKEN in .env}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
+      AUTH_ENVIRONMENT: development
+      AUTH_CAPTCHA_MODE: console
+      AUTH_PUBLIC_REGISTRATION_ENABLED: "false"
+      UPLOAD_ROOT: /data/uploads
+      UPLOAD_MAX_FILE_SIZE_MB: "20"
+      UPLOAD_MAX_REQUEST_SIZE_MB: "25"
+      STORAGE_BACKEND: local
+      OSS_KEY_PREFIX: doctrail
+    volumes:
+      - uploads_data:/data/uploads
+    networks:
+      - doctrail_private
+    healthcheck:
+      test:
+        - CMD
+        - java
+        - -cp
+        - /app/healthcheck
+        - com.doctrail.operations.JavaLivenessProbe
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 30s
+
+  nginx:
+    image: doctrail-nginx:local
+    build:
+      context: .
+      dockerfile: Dockerfile.nginx
+    restart: unless-stopped
+    depends_on:
+      java:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${NGINX_HOST_PORT:-8080}:80"
+    networks:
+      - doctrail_private
+
+volumes:
+  mysql_data:
+  uploads_data:
+  faiss_data:
+  model_cache:
+
+networks:
+  doctrail_private:
+    driver: bridge

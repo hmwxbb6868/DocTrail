@@ -1,0 +1,14 @@
+DocTrail
+Copyright 2026 TDAgent contributors
+
+This product is an independent reproduction and modification based on ideas and
+architecture studied from AgentCraft by EvanYao826:
+https://github.com/EvanYao826/AgentCraft
+
+The upstream project is distributed under the Apache License, Version 2.0.
+DocTrail does not copy upstream credentials, private environment configuration,
+uploaded files, vector indexes, or the original full dataset into this repository.
+Project-specific changes include contract-first APIs, explicit service write
+ownership, legacy-data isolation, modern LangChain v1.x integration, index
+versioning, stream lifecycle rules, testing, governance, and deployment work.
+

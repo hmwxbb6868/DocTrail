@@ -1,0 +1,753 @@
+openapi: 3.1.0
+info:
+  title: DocTrail Public API
+  version: 1.3.0
+  description: Browser-to-Java v1 contract plus the Java container operations endpoint. Public business JSON uses camelCase.
+servers:
+  - url: /api
+    description: Same-origin Java API through Vite or Nginx
+tags:
+  - name: Operations
+  - name: Authentication
+  - name: Conversations
+  - name: Messages
+  - name: Knowledge
+  - name: Administration
+paths:
+  /health/live:
+    servers:
+      - url: /
+        description: Java container-internal operations root; this path does not use the global /api prefix
+    get:
+      tags: [Operations]
+      summary: Check whether the Java process and embedded HTTP server are responsive
+      description: This liveness probe has no MySQL, Redis, Python, or model dependency and is not exposed through the public Nginx route.
+      operationId: getJavaLiveness
+      security: []
+      responses:
+        '200':
+          description: The Java HTTP process is alive.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/JavaLiveness' }
+              examples:
+                live: { externalValue: ./examples/java-health-live.response.json }
+  /auth/login:
+    post:
+      tags: [Authentication]
+      summary: Log in a user
+      operationId: loginUser
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AuthRequest' }
+            examples:
+              login: { externalValue: ./examples/auth-login.request.json }
+      responses:
+        '200':
+          description: Login succeeded.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthResult' }
+              examples:
+                login: { externalValue: ./examples/auth-login.response.json }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /auth/register:
+    post:
+      tags: [Authentication]
+      summary: Register a user
+      operationId: registerUser
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegisterRequest' }
+      responses:
+        '200':
+          description: Registration succeeded and an access token was issued.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthResult' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '501': { $ref: '#/components/responses/StageFeatureUnavailable' }
+  /auth/captcha:
+    get:
+      tags: [Authentication]
+      summary: Issue a development registration captcha challenge
+      operationId: issueRegistrationCaptcha
+      security: []
+      responses:
+        '200':
+          description: Captcha challenge issued. The code is printed only by the development server console.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CaptchaChallenge' }
+              examples:
+                captcha: { externalValue: ./examples/auth-captcha.response.json }
+        '501': { $ref: '#/components/responses/StageFeatureUnavailable' }
+  /auth/refresh:
+    post:
+      tags: [Authentication]
+      summary: Rotate the HttpOnly refresh cookie and issue an access token
+      operationId: refreshUserSession
+      security:
+        - refreshCookie: []
+      responses:
+        '200':
+          description: Refresh succeeded.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthResult' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '501': { $ref: '#/components/responses/StageFeatureUnavailable' }
+  /auth/logout:
+    post:
+      tags: [Authentication]
+      summary: Revoke the refresh session
+      operationId: logoutUser
+      security:
+        - refreshCookie: []
+      responses:
+        '200':
+          description: Logout succeeded.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EmptyResult' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '501': { $ref: '#/components/responses/StageFeatureUnavailable' }
+  /admin/auth/login:
+    post:
+      tags: [Authentication]
+      summary: Log in an administrator
+      operationId: loginAdmin
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AuthRequest' }
+      responses:
+        '200':
+          description: Administrator login succeeded.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthResult' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /chat/conversations:
+    get:
+      tags: [Conversations]
+      summary: List conversations owned by the authenticated user
+      operationId: listConversations
+      responses:
+        '200':
+          description: Conversations ordered by updatedAt descending.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConversationListResult' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [Conversations]
+      summary: Create a conversation for the authenticated user
+      operationId: createConversation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateConversationRequest' }
+      responses:
+        '200':
+          description: Conversation created.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConversationResult' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /chat/conversations/{conversationId}:
+    parameters:
+      - $ref: '#/components/parameters/ConversationId'
+    put:
+      tags: [Conversations]
+      summary: Rename a conversation owned by the authenticated user
+      operationId: updateConversation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateConversationRequest' }
+      responses:
+        '200':
+          description: Conversation updated.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConversationResult' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [Conversations]
+      summary: Delete a conversation owned by the authenticated user
+      operationId: deleteConversation
+      responses:
+        '200':
+          description: Conversation deleted.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EmptyResult' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /chat/messages:
+    get:
+      tags: [Messages]
+      summary: List messages in an owned conversation
+      operationId: listMessages
+      parameters:
+        - $ref: '#/components/parameters/ConversationIdQuery'
+      responses:
+        '200':
+          description: Messages ordered by id ascending.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MessageListResult' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [Messages]
+      summary: Ask through Java and the internal Python AI service
+      operationId: sendChatMessage
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ChatMessageRequest' }
+      responses:
+        '200':
+          description: Synchronous routed answer. Stage 6 returns the actual knowledge_qa or chitchat branch with mock=false.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChatMessageResult' }
+              examples:
+                formalRag: { externalValue: ./examples/chat-message.response.json }
+                chitchat: { externalValue: ./examples/chat-message-chitchat.response.json }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '502': { $ref: '#/components/responses/AiUnavailable' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
+        '504': { $ref: '#/components/responses/AiTimeout' }
+  /chat/messages/{messageId}/feedback:
+    parameters:
+      - $ref: '#/components/parameters/MessageId'
+    put:
+      tags: [Messages]
+      summary: Submit or replace the current user's feedback for an assistant message
+      description: Only authenticated users may submit feedback for assistant messages in their own conversations. Repeating the request replaces the user's previous value; cancellation is not supported in v1.
+      operationId: submitMessageFeedback
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MessageFeedbackRequest' }
+            examples:
+              feedback: { externalValue: ./examples/chat-message-feedback.request.json }
+      responses:
+        '200':
+          description: The complete message with the current user's newly applied feedback value.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MessageResult' }
+              examples:
+                feedback: { externalValue: ./examples/chat-message-feedback.response.json }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /chat/stream/messages:
+    post:
+      tags: [Messages]
+      summary: Compatibility stream path; real SSE is cancelled
+      description: Compatibility path only. Real SSE is cancelled; runtime returns HTTP 501 with Result.code=5010.
+      operationId: streamChatMessage
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ChatMessageRequest' }
+      responses:
+        '501': { $ref: '#/components/responses/StageFeatureUnavailable' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '502': { $ref: '#/components/responses/AiUnavailable' }
+  /knowledge/documents:
+    get:
+      tags: [Knowledge]
+      summary: List global knowledge documents visible to authenticated users
+      operationId: listKnowledgeDocuments
+      responses:
+        '200':
+          description: Read-only global knowledge document list.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/KnowledgeDocumentListResult' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /admin/dashboard:
+    get:
+      tags: [Administration]
+      summary: Get administrator dashboard counters
+      operationId: getAdminDashboard
+      responses:
+        '200':
+          description: Dashboard counters.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DashboardResult' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /admin/knowledge/documents:
+    get:
+      tags: [Administration]
+      summary: List global knowledge documents as an administrator
+      operationId: listAdminKnowledgeDocuments
+      responses:
+        '200':
+          description: Knowledge documents.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/KnowledgeDocumentListResult' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [Administration]
+      summary: Upload a global knowledge document
+      operationId: uploadKnowledgeDocument
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        '202':
+          description: >-
+            The uploaded bytes are persisted to the configured storage backend
+            and asynchronous document parsing has been queued.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/KnowledgeDocumentResult' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '415': { $ref: '#/components/responses/UnsupportedMediaType' }
+  /admin/knowledge/documents/{docId}:
+    delete:
+      tags: [Administration]
+      summary: Delete a global knowledge document
+      operationId: deleteKnowledgeDocument
+      parameters:
+        - $ref: '#/components/parameters/DocId'
+      responses:
+        '200':
+          description: Deletion completed or accepted by the lifecycle handler.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EmptyResult' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /admin/agent-runs:
+    get:
+      tags: [Administration]
+      summary: List Java-owned Agent audit runs
+      operationId: listAgentRuns
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: size
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        '200':
+          description: Paged Agent runs.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentRunPageResult' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /admin/agent-runs/{runId}:
+    get:
+      tags: [Administration]
+      summary: Get one Java-owned Agent audit run with steps and tool calls
+      operationId: getAgentRun
+      parameters:
+        - $ref: '#/components/parameters/RunId'
+      responses:
+        '200':
+          description: Agent run detail.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentRunResult' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    refreshCookie:
+      type: apiKey
+      in: cookie
+      name: refresh_token
+  parameters:
+    RequestId:
+      name: X-Request-Id
+      in: header
+      required: true
+      schema: { type: string, format: uuid }
+    ConversationId:
+      name: conversationId
+      in: path
+      required: true
+      schema: { type: integer, format: int64, minimum: 1 }
+    MessageId:
+      name: messageId
+      in: path
+      required: true
+      schema: { type: integer, format: int64, minimum: 1 }
+    ConversationIdQuery:
+      name: conversationId
+      in: query
+      required: true
+      schema: { type: integer, format: int64, minimum: 1 }
+    DocId:
+      name: docId
+      in: path
+      required: true
+      schema: { type: integer, format: int64, minimum: 1 }
+    RunId:
+      name: runId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+  responses:
+    BadRequest: { description: Invalid request, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResult' } } } }
+    Unauthorized: { description: Missing, expired, or invalid authentication, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResult' } } } }
+    Forbidden: { description: Authenticated but not allowed, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResult' } } } }
+    NotFound: { description: Resource not found, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResult' } } } }
+    Conflict: { description: Resource conflict, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResult' } } } }
+    PayloadTooLarge: { description: Uploaded file exceeds the configured size limit, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResult' } } } }
+    UnsupportedMediaType: { description: File type or server-side content detection is not accepted, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResult' } } } }
+    AiUnavailable: { description: Python AI service is unreachable/not ready (Result.code=3001) or returned a contract-invalid response (Result.code=3003); both use HTTP 502, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResult' } } } }
+    AiContractInvalid: { description: Python response is parseable but violates the frozen contract (HTTP 502, Result.code=3003), content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResult' } } } }
+    AiTimeout: { description: Python AI call timed out (HTTP 504, Result.code=3002), content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResult' } } } }
+    InternalServerError: { description: Internal snapshot or service failure (HTTP 500, Result.code=5000), content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResult' } } } }
+    StageFeatureUnavailable: { description: Feature is not implemented in the current route (HTTP 501, Result.code=5010), content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResult' } } } }
+  schemas:
+    JavaLiveness:
+      type: object
+      additionalProperties: false
+      required: [status, service, timestamp]
+      properties:
+        status: { type: string, const: UP }
+        service: { type: string, const: doctrail-java }
+        timestamp: { type: string, format: date-time }
+    AuthRequest:
+      type: object
+      additionalProperties: false
+      required: [username, password]
+      properties:
+        username: { type: string, minLength: 3, maxLength: 64 }
+        password: { type: string, minLength: 6, maxLength: 72, writeOnly: true }
+    RegisterRequest:
+      type: object
+      additionalProperties: false
+      required: [username, password, captchaId, captchaCode]
+      properties:
+        username: { type: string, minLength: 3, maxLength: 64 }
+        password: { type: string, minLength: 6, maxLength: 72, writeOnly: true }
+        captchaId: { type: string, format: uuid }
+        captchaCode: { type: string, minLength: 4, maxLength: 8, pattern: '^[0-9]{4,8}$', writeOnly: true }
+    CaptchaChallenge:
+      type: object
+      additionalProperties: false
+      required: [captchaId, expiresInSeconds]
+      properties:
+        captchaId: { type: string, format: uuid }
+        expiresInSeconds: { type: integer, format: int64, minimum: 1 }
+    AuthSession:
+      type: object
+      additionalProperties: false
+      required: [accessToken, mock]
+      properties:
+        accessToken: { type: string, minLength: 1 }
+        mock: { type: boolean }
+    CreateConversationRequest:
+      type: object
+      additionalProperties: false
+      required: [title]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 200 }
+    UpdateConversationRequest:
+      $ref: '#/components/schemas/CreateConversationRequest'
+    Conversation:
+      type: object
+      additionalProperties: false
+      required: [id, title, createdAt, updatedAt, mock]
+      properties:
+        id: { type: integer, format: int64, minimum: 1 }
+        title: { type: string, minLength: 1, maxLength: 200 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        mock: { type: boolean }
+    Message:
+      type: object
+      additionalProperties: false
+      required: [id, conversationId, role, content, createdAt, sources, mock]
+      properties:
+        id: { type: integer, format: int64, minimum: 1 }
+        conversationId: { type: integer, format: int64, minimum: 1 }
+        role: { type: string, enum: [user, assistant, system] }
+        content: { type: string }
+        createdAt: { type: string, format: date-time }
+        feedback: { type: [string, 'null'], enum: [up, down, null], description: Feedback value submitted by the current authenticated user for this message. }
+        sources:
+          type: array
+          items: { $ref: '#/components/schemas/Source' }
+        mock: { type: boolean }
+    ChatMessageRequest:
+      type: object
+      additionalProperties: false
+      required: [question, conversationId]
+      properties:
+        question: { type: string, minLength: 1, maxLength: 4000 }
+        conversationId: { type: integer, format: int64, minimum: 1 }
+    MessageFeedbackRequest:
+      type: object
+      additionalProperties: false
+      required: [value]
+      properties:
+        value: { type: string, enum: [up, down] }
+    ChatMessageResponse:
+      type: object
+      additionalProperties: false
+      required: [answer, sources, taskType, runId, traceId, usage, executionTrace, mock]
+      properties:
+        answer: { type: string }
+        sources:
+          type: array
+          items: { $ref: '#/components/schemas/Source' }
+        taskType: { type: string, enum: [knowledge_qa, retrieval, chitchat, reasoning] }
+        runId: { type: string, format: uuid }
+        traceId: { type: string, format: uuid }
+        usage:
+          oneOf:
+            - $ref: '#/components/schemas/Usage'
+            - type: 'null'
+        executionTrace: { $ref: '#/components/schemas/ExecutionTrace' }
+        mock: { type: boolean }
+    Source:
+      type: object
+      additionalProperties: false
+      required: [docId, docName]
+      properties:
+        docId: { type: integer, format: int64, minimum: 1 }
+        docName: { type: string }
+        page: { type: [integer, 'null'], minimum: 1 }
+        chunkIndex: { type: [integer, 'null'], minimum: 0 }
+        score: { type: [number, 'null'], minimum: 0, maximum: 1 }
+    Usage:
+      type: object
+      additionalProperties: false
+      required: [promptTokens, completionTokens, totalTokens, estimatedCost]
+      properties:
+        promptTokens: { type: integer, minimum: 0 }
+        completionTokens: { type: integer, minimum: 0 }
+        totalTokens: { type: integer, minimum: 0 }
+        estimatedCost: { type: [string, 'null'], pattern: '^\d+(\.\d{1,6})?$' }
+    ExecutionTrace:
+      type: object
+      additionalProperties: false
+      required: [status, steps, toolCalls]
+      properties:
+        status: { type: string, enum: [RUNNING, COMPLETED, FAILED, CANCELLED] }
+        steps: { type: array, items: { $ref: '#/components/schemas/TraceStep' } }
+        toolCalls: { type: array, items: { $ref: '#/components/schemas/TraceToolCall' } }
+    TraceStep:
+      type: object
+      additionalProperties: false
+      required: [stepId, stepName, status, durationMs, errorCode, errorMessage]
+      properties:
+        stepId: { type: string, format: uuid }
+        stepName: { type: string }
+        status: { type: string, enum: [RUNNING, COMPLETED, FAILED, CANCELLED] }
+        durationMs: { type: [integer, 'null'], minimum: 0 }
+        errorCode: { type: [integer, 'null'] }
+        errorMessage: { type: [string, 'null'] }
+    TraceToolCall:
+      type: object
+      additionalProperties: false
+      required: [toolCallId, toolName, status, inputParams, output, durationMs, errorCode, errorMessage]
+      properties:
+        toolCallId: { type: string, format: uuid }
+        toolName: { type: string }
+        status: { type: string, enum: [RUNNING, COMPLETED, FAILED, CANCELLED] }
+        inputParams: { type: [object, 'null'], additionalProperties: true }
+        output: { type: [object, 'null'], additionalProperties: true }
+        durationMs: { type: [integer, 'null'], minimum: 0 }
+        errorCode: { type: [integer, 'null'] }
+        errorMessage: { type: [string, 'null'] }
+    KnowledgeDocument:
+      type: object
+      additionalProperties: false
+      required: [id, name, status, createdAt, updatedAt, mock]
+      properties:
+        id: { type: integer, format: int64, minimum: 1 }
+        name: { type: string, maxLength: 255 }
+        status: { type: string, enum: [PENDING, PROCESSING, COMPLETED, FAILED, DELETING, DELETED] }
+        failureReason: { type: [string, 'null'], maxLength: 500 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        mock: { type: boolean, description: True for stage-1 in-memory placeholder data. }
+    DashboardStats:
+      type: object
+      additionalProperties: false
+      required: [documentCount, questionCount, runCount, successRate, mock]
+      properties:
+        documentCount: { type: integer, format: int64, minimum: 0, description: Documents currently in COMPLETED state. }
+        questionCount: { type: integer, format: int64, minimum: 0, description: Retained user requests in SUCCEEDED or FAILED state with a request ID. }
+        runCount: { type: integer, format: int64, minimum: 0, description: Retained Agent run records across all states. }
+        successRate: { type: number, minimum: 0, maximum: 100, description: Cumulative percentage of COMPLETED runs among COMPLETED and FAILED runs. Zero when the denominator is zero. }
+        finishedRunCount: { type: integer, format: int64, minimum: 0, description: Number of COMPLETED and FAILED runs. Clients may display no sample when this is zero. }
+        mock: { type: boolean, description: True for placeholder counters outside the persistence profiles. }
+    AgentRun:
+      type: object
+      additionalProperties: false
+      required: [runId, traceId, requestId, status, startedAt, finishedAt, steps, toolCalls, errorCode, errorMessage, mock]
+      properties:
+        runId: { type: string, format: uuid }
+        traceId: { type: string, format: uuid }
+        requestId: { type: string, format: uuid }
+        taskType: { type: [string, 'null'] }
+        status: { type: string, enum: [RUNNING, COMPLETED, FAILED, CANCELLED] }
+        startedAt: { type: string, format: date-time }
+        finishedAt: { type: [string, 'null'], format: date-time }
+        steps: { type: array, items: { $ref: '#/components/schemas/TraceStep' } }
+        toolCalls: { type: array, items: { $ref: '#/components/schemas/TraceToolCall' } }
+        errorCode: { type: [integer, 'null'] }
+        errorMessage: { type: [string, 'null'] }
+        mock: { type: boolean, description: True for stage-1 placeholder run data. }
+    AgentRunPage:
+      type: object
+      additionalProperties: false
+      required: [items, page, size, total, mock]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/AgentRun' } }
+        page: { type: integer, minimum: 1 }
+        size: { type: integer, minimum: 1 }
+        total: { type: integer, format: int64, minimum: 0 }
+        mock: { type: boolean, description: True for the stage-1 placeholder page. }
+    ErrorResult:
+      type: object
+      additionalProperties: false
+      required: [code, msg, data]
+      properties:
+        code: { type: integer }
+        msg: { type: string }
+        data: { type: 'null' }
+    EmptyResult:
+      allOf:
+        - $ref: '#/components/schemas/ErrorResult'
+      description: Successful form uses code=1, msg=success, and data=null.
+    AuthResult: { $ref: '#/components/schemas/ResultAuthSession' }
+    ConversationResult: { $ref: '#/components/schemas/ResultConversation' }
+    ConversationListResult: { $ref: '#/components/schemas/ResultConversationList' }
+    MessageListResult: { $ref: '#/components/schemas/ResultMessageList' }
+    MessageResult: { $ref: '#/components/schemas/ResultMessage' }
+    ChatMessageResult: { $ref: '#/components/schemas/ResultChatMessage' }
+    KnowledgeDocumentResult: { $ref: '#/components/schemas/ResultKnowledgeDocument' }
+    KnowledgeDocumentListResult: { $ref: '#/components/schemas/ResultKnowledgeDocumentList' }
+    DashboardResult: { $ref: '#/components/schemas/ResultDashboard' }
+    AgentRunResult: { $ref: '#/components/schemas/ResultAgentRun' }
+    AgentRunPageResult: { $ref: '#/components/schemas/ResultAgentRunPage' }
+    ResultAuthSession:
+      type: object
+      additionalProperties: false
+      required: [code, msg, data]
+      properties: { code: { type: integer, const: 1 }, msg: { type: string, const: success }, data: { $ref: '#/components/schemas/AuthSession' } }
+    ResultConversation:
+      type: object
+      additionalProperties: false
+      required: [code, msg, data]
+      properties: { code: { type: integer, const: 1 }, msg: { type: string, const: success }, data: { $ref: '#/components/schemas/Conversation' } }
+    ResultConversationList:
+      type: object
+      additionalProperties: false
+      required: [code, msg, data]
+      properties: { code: { type: integer, const: 1 }, msg: { type: string, const: success }, data: { type: array, items: { $ref: '#/components/schemas/Conversation' } } }
+    ResultMessageList:
+      type: object
+      additionalProperties: false
+      required: [code, msg, data]
+      properties: { code: { type: integer, const: 1 }, msg: { type: string, const: success }, data: { type: array, items: { $ref: '#/components/schemas/Message' } } }
+    ResultMessage:
+      type: object
+      additionalProperties: false
+      required: [code, msg, data]
+      properties: { code: { type: integer, const: 1 }, msg: { type: string, const: success }, data: { $ref: '#/components/schemas/Message' } }
+    ResultChatMessage:
+      type: object
+      additionalProperties: false
+      required: [code, msg, data]
+      properties: { code: { type: integer, const: 1 }, msg: { type: string, const: success }, data: { $ref: '#/components/schemas/ChatMessageResponse' } }
+    ResultKnowledgeDocument:
+      type: object
+      additionalProperties: false
+      required: [code, msg, data]
+      properties: { code: { type: integer, const: 1 }, msg: { type: string, const: success }, data: { $ref: '#/components/schemas/KnowledgeDocument' } }
+    ResultKnowledgeDocumentList:
+      type: object
+      additionalProperties: false
+      required: [code, msg, data]
+      properties: { code: { type: integer, const: 1 }, msg: { type: string, const: success }, data: { type: array, items: { $ref: '#/components/schemas/KnowledgeDocument' } } }
+    ResultDashboard:
+      type: object
+      additionalProperties: false
+      required: [code, msg, data]
+      properties: { code: { type: integer, const: 1 }, msg: { type: string, const: success }, data: { $ref: '#/components/schemas/DashboardStats' } }
+    ResultAgentRun:
+      type: object
+      additionalProperties: false
+      required: [code, msg, data]
+      properties: { code: { type: integer, const: 1 }, msg: { type: string, const: success }, data: { $ref: '#/components/schemas/AgentRun' } }
+    ResultAgentRunPage:
+      type: object
+      additionalProperties: false
+      required: [code, msg, data]
+      properties: { code: { type: integer, const: 1 }, msg: { type: string, const: success }, data: { $ref: '#/components/schemas/AgentRunPage' } }
+security:
+  - bearerAuth: []

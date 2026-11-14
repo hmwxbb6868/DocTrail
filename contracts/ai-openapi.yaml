@@ -1,0 +1,714 @@
+openapi: 3.1.0
+info:
+  title: DocTrail Internal AI API
+  version: 1.2.0
+  description: >-
+    Contract for Java-to-Python calls. The synchronous /api/ask path routes
+    enumerated chitchat phrases to ChitChat and all other input to the formal
+    active-chunk FAISS knowledge baseline; both return mock=false.
+    The stream path is compatibility-only and returns HTTP 501/code 5010.
+servers:
+  - url: http://python-service:8000
+    description: Docker internal network
+  - url: http://127.0.0.1:8000
+    description: Local development
+tags:
+  - name: Health
+    description: Internal process and dependency health checks
+  - name: Ask
+    description: Synchronous internal AI question answering
+  - name: Knowledge
+    description: Internal document parsing and derived-index lifecycle
+  - name: Agent Diagnostics
+    description: Ephemeral single-process Agent run diagnostics; Java audit remains authoritative
+paths:
+  /health/live:
+    get:
+      tags:
+        - Health
+      summary: Check whether the Python process is alive
+      operationId: getLiveness
+      security: []
+      responses:
+        "200":
+          description: The Python HTTP process is responsive.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LivenessResponse"
+              examples:
+                live:
+                  externalValue: ./examples/ai-health-live.response.json
+  /health/ready:
+    get:
+      tags:
+        - Health
+      summary: Check whether the Python service can accept AI requests
+      operationId: getReadiness
+      security: []
+      responses:
+        "200":
+          description: All currently required readiness checks passed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReadinessResponse"
+              examples:
+                ready:
+                  externalValue: ./examples/ai-health-ready.response.json
+        "503":
+          description: The process is alive but one or more required checks failed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReadinessResponse"
+              examples:
+                notReady:
+                  externalValue: ./examples/ai-health-not-ready.response.json
+  /api/ask:
+    post:
+      tags: [Ask]
+      summary: Route and execute a synchronous knowledge or chitchat question
+      operationId: ask
+      security:
+        - internalToken: []
+      parameters:
+        - name: X-Trace-Id
+          in: header
+          required: true
+          schema: { type: string, format: uuid }
+          description: Must equal trace_id in the JSON request.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AskRequest" }
+            examples:
+              baseline: { externalValue: ./examples/ai-ask.request.json }
+      responses:
+        "200":
+          description: The synchronous answer envelope from the routed knowledge_qa or chitchat branch.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AskResponse" }
+              examples:
+                formalRag: { externalValue: ./examples/ai-ask.response.json }
+                chitchat: { externalValue: ./examples/ai-ask-chitchat.response.json }
+        "400":
+          description: X-Trace-Id and trace_id differ or the request is invalid.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InternalError" }
+        "422":
+          description: FastAPI request validation failed; Java maps this contract violation to HTTP 502/Result.code=3003.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InternalError" }
+        "401":
+          description: X-Internal-Token is missing or invalid.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InternalError" }
+        "503":
+          description: The formal index or DeepSeek provider is unavailable.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InternalError" }
+        "500":
+          description: The Python service has an invalid internal-token configuration.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InternalError" }
+        "504":
+          description: The model request timed out.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InternalError" }
+  /api/ask/stream:
+    post:
+      tags: [Ask]
+      summary: Compatibility stream path; real SSE is cancelled
+      operationId: askStreamUnavailable
+      security:
+        - internalToken: []
+      responses:
+        "501":
+          description: Real SSE is not implemented (Result.code=5010 at the public Java boundary).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InternalError" }
+  /api/agent/run/{run_id}:
+    get:
+      tags: [Agent Diagnostics]
+      summary: Read one ephemeral in-process Agent run summary
+      operationId: getAgentRunDiagnostic
+      security:
+        - internalToken: []
+      parameters:
+        - $ref: "#/components/parameters/RunIdPath"
+      responses:
+        "200":
+          description: The run is still retained by this Python process.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentRunDiagnosticResponse" }
+              examples:
+                completed: { externalValue: ./examples/ai-agent-run.response.json }
+        "401":
+          description: X-Internal-Token is missing or invalid.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InternalError" }
+        "404":
+          description: The run is unknown to this process or was lost after restart.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InternalError" }
+        "422":
+          description: run_id is not a UUID.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InternalError" }
+        "500":
+          description: The Python service has an invalid internal-token configuration.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InternalError" }
+  /api/agent/run/{run_id}/steps:
+    get:
+      tags: [Agent Diagnostics]
+      summary: Read the steps retained for one ephemeral in-process Agent run
+      operationId: getAgentRunStepsDiagnostic
+      security:
+        - internalToken: []
+      parameters:
+        - $ref: "#/components/parameters/RunIdPath"
+      responses:
+        "200":
+          description: The run steps currently retained by this Python process.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentRunStepsResponse" }
+              examples:
+                completed: { externalValue: ./examples/ai-agent-run-steps.response.json }
+        "401":
+          description: X-Internal-Token is missing or invalid.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InternalError" }
+        "404":
+          description: The run is unknown to this process or was lost after restart.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InternalError" }
+        "422":
+          description: run_id is not a UUID.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InternalError" }
+        "500":
+          description: The Python service has an invalid internal-token configuration.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InternalError" }
+  /api/agent/run/{run_id}/tool-calls:
+    get:
+      tags: [Agent Diagnostics]
+      summary: Read the tool calls retained for one ephemeral in-process Agent run
+      operationId: getAgentRunToolCallsDiagnostic
+      security:
+        - internalToken: []
+      parameters:
+        - $ref: "#/components/parameters/RunIdPath"
+      responses:
+        "200":
+          description: The run tool calls currently retained by this Python process.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentRunToolCallsResponse" }
+              examples:
+                completed: { externalValue: ./examples/ai-agent-run-tool-calls.response.json }
+        "401":
+          description: X-Internal-Token is missing or invalid.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InternalError" }
+        "404":
+          description: The run is unknown to this process or was lost after restart.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InternalError" }
+        "422":
+          description: run_id is not a UUID.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InternalError" }
+        "500":
+          description: The Python service has an invalid internal-token configuration.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InternalError" }
+  /api/vector-store/stats:
+    get:
+      tags: [Knowledge]
+      summary: Read formal FAISS index statistics without repairing the index
+      operationId: getVectorStoreStats
+      security:
+        - internalToken: []
+      parameters:
+        - $ref: "#/components/parameters/TraceIdHeader"
+      responses:
+        "200":
+          description: The active formal FAISS manifest is consistent with active MySQL chunks and embedding configuration.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VectorStoreStatsResponse" }
+              examples:
+                ready: { externalValue: ./examples/ai-vector-store-stats.response.json }
+        "400":
+          description: The X-Trace-Id header is missing or is not a valid UUID.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InternalError" }
+        "401":
+          description: X-Internal-Token is missing or invalid.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InternalError" }
+        "503":
+          description: The active manifest is missing, inconsistent, or unavailable. The response body still carries the read-only statistics shape with ready=false.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VectorStoreStatsResponse" }
+        "500":
+          description: The Python service has an invalid internal-token configuration.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InternalError" }
+  /api/vector-store/rebuild:
+    post:
+      tags: [Knowledge]
+      summary: Rebuild and atomically activate the formal FAISS index from active chunks
+      operationId: rebuildVectorStore
+      security:
+        - internalToken: []
+      parameters:
+        - $ref: "#/components/parameters/TraceIdHeader"
+      responses:
+        "200":
+          description: A new formal FAISS build was created and activated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VectorStoreStatsResponse" }
+              examples:
+                rebuilt: { externalValue: ./examples/ai-vector-store-rebuild.response.json }
+        "400":
+          description: The X-Trace-Id header is missing or is not a valid UUID.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InternalError" }
+        "401":
+          description: X-Internal-Token is missing or invalid.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InternalError" }
+        "500":
+          description: The Python service has an invalid internal-token configuration.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InternalError" }
+        "503":
+          description: Rebuild failed or the active chunk/vector dependencies are unavailable; the previous active build remains published.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VectorStoreStatsResponse" }
+  /api/parse:
+    post:
+      tags: [Knowledge]
+      summary: Parse one uploaded document and atomically publish its vector index
+      operationId: parseDocument
+      security:
+        - internalToken: []
+      parameters:
+        - $ref: "#/components/parameters/TraceIdHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ParseRequest" }
+            examples:
+              parse: { externalValue: ./examples/ai-parse.request.json }
+      responses:
+        "200":
+          description: Parsing, chunk persistence, embedding and atomic FAISS index publication finished. A failed index build returns status FAILED and preserves the previous active index.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ParseResponse" }
+              examples:
+                completed: { externalValue: ./examples/ai-parse.response.json }
+        "400":
+          description: Invalid request or trace header mismatch.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InternalError" }
+        "401":
+          description: X-Internal-Token is missing or invalid.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InternalError" }
+        "404":
+          description: The storage key does not resolve to an uploaded file.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InternalError" }
+        "409":
+          description: The requested document operation conflicts with an active lifecycle operation.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InternalError" }
+        "503":
+          description: The AI service is not ready to parse documents.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InternalError" }
+  /api/delete:
+    post:
+      tags: [Knowledge]
+      summary: Idempotently remove one document's chunks and derived index entries
+      operationId: deleteDocument
+      security:
+        - internalToken: []
+      parameters:
+        - $ref: "#/components/parameters/TraceIdHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DeleteRequest" }
+            examples:
+              delete: { externalValue: ./examples/ai-delete.request.json }
+      responses:
+        "200":
+          description: Deletion completed or was already complete.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DeleteResponse" }
+              examples:
+                deleted: { externalValue: ./examples/ai-delete.response.json }
+        "400":
+          description: Invalid request or trace header mismatch.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InternalError" }
+        "401":
+          description: X-Internal-Token is missing or invalid.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InternalError" }
+        "409":
+          description: The requested document operation conflicts with an active lifecycle operation.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InternalError" }
+        "503":
+          description: The AI service is not ready to update derived indexes.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InternalError" }
+components:
+  securitySchemes:
+    internalToken:
+      type: apiKey
+      in: header
+      name: X-Internal-Token
+  parameters:
+    TraceIdHeader:
+      name: X-Trace-Id
+      in: header
+      required: true
+      schema: { type: string, format: uuid }
+      description: UUID used to correlate the internal request; bodyless endpoints only echo it in the response.
+    RunIdPath:
+      name: run_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+      description: UUID returned by the synchronous ask response.
+  schemas:
+    AskHistoryItem:
+      type: object
+      additionalProperties: false
+      required: [message_id, role, content]
+      properties:
+        message_id: { type: integer, format: int64, minimum: 1 }
+        role: { type: string, enum: [user, assistant, system] }
+        content:
+          type: string
+          description: UTF-8 content; history messages are budgeted with 64 fixed bytes per entry.
+    AskRequest:
+      type: object
+      additionalProperties: false
+      required: [question, conversation_id, history, is_admin, request_id, run_id, trace_id, include_trace]
+      properties:
+        question: { type: string, minLength: 1, maxLength: 4000 }
+        conversation_id: { type: integer, format: int64, minimum: 1 }
+        user_id:
+          type: [integer, "null"]
+          format: int64
+          minimum: 1
+          description: Null only while the stage-1 public endpoint is an unauthenticated stub.
+        history:
+          type: array
+          maxItems: 20
+          description: >-
+            Ordered oldest-to-newest contiguous suffix. The sum of each message's UTF-8 content bytes plus
+            64 fixed bytes must not exceed 8192. Java selects complete messages only and never truncates content.
+          items: { $ref: "#/components/schemas/AskHistoryItem" }
+        history_version: { type: [integer, "null"], format: int64, minimum: 1 }
+        username: { type: [string, "null"], maxLength: 64 }
+        is_admin: { type: boolean }
+        request_id: { type: string, format: uuid }
+        run_id: { type: string, format: uuid }
+        trace_id: { type: string, format: uuid }
+        include_trace: { type: boolean }
+    StorageKey:
+      type: string
+      minLength: 1
+      maxLength: 512
+      pattern: '^(?!/)(?!.*\.\.)[A-Za-z0-9][A-Za-z0-9._/-]*$'
+      description: Relative key only; never a Windows/Linux absolute path and never containing ..
+    ContentHash:
+      type: string
+      pattern: '^[a-f0-9]{64}$'
+      description: Lowercase hexadecimal SHA-256 of the uploaded bytes.
+    ParseRequest:
+      type: object
+      additionalProperties: false
+      required: [doc_id, storage_key, content_hash, force, trace_id]
+      properties:
+        doc_id: { type: integer, format: int64, minimum: 1 }
+        storage_key: { $ref: "#/components/schemas/StorageKey" }
+        content_hash: { $ref: "#/components/schemas/ContentHash" }
+        force: { type: boolean }
+        trace_id: { type: string, format: uuid }
+    ParseResponse:
+      type: object
+      additionalProperties: false
+      required: [doc_id, status, batch_id, chunk_count, index_build_id, trace_id, error_message]
+      properties:
+        doc_id: { type: integer, format: int64, minimum: 1 }
+        status: { type: string, enum: [COMPLETED, FAILED] }
+        batch_id: { type: [string, "null"], format: uuid }
+        chunk_count: { type: integer, minimum: 0 }
+        index_build_id: { type: [string, "null"], format: uuid }
+        trace_id: { type: string, format: uuid }
+        error_message: { type: [string, "null"], maxLength: 500 }
+    DeleteRequest:
+      type: object
+      additionalProperties: false
+      required: [doc_id, trace_id]
+      properties:
+        doc_id: { type: integer, format: int64, minimum: 1 }
+        trace_id: { type: string, format: uuid }
+    DeleteResponse:
+      type: object
+      additionalProperties: false
+      required: [doc_id, status, deleted_chunk_count, trace_id, error_message]
+      properties:
+        doc_id: { type: integer, format: int64, minimum: 1 }
+        status: { type: string, enum: [DELETED, FAILED] }
+        deleted_chunk_count: { type: integer, minimum: 0 }
+        trace_id: { type: string, format: uuid }
+        error_message: { type: [string, "null"], maxLength: 500 }
+    VectorStoreStatsResponse:
+      type: object
+      additionalProperties: false
+      required: [backend, index_build_id, embedding_model, dimension, normalized, chunk_count, active_chunk_digest, created_at, ready, trace_id]
+      properties:
+        backend: { type: string, const: faiss }
+        index_build_id: { type: [string, "null"], format: uuid }
+        embedding_model: { type: [string, "null"] }
+        dimension: { type: [integer, "null"], minimum: 1 }
+        normalized: { type: [boolean, "null"] }
+        chunk_count: { type: [integer, "null"], minimum: 0 }
+        active_chunk_digest: { type: [string, "null"], pattern: '^[a-f0-9]{64}$' }
+        created_at: { type: [string, "null"], format: date-time }
+        ready: { type: boolean }
+        trace_id: { type: string, format: uuid }
+    AskSource:
+      type: object
+      additionalProperties: false
+      required: [doc_id, doc_name]
+      properties:
+        doc_id: { type: integer, format: int64, minimum: 1 }
+        doc_name: { type: string }
+        page: { type: [integer, "null"], minimum: 1 }
+        chunk_index: { type: [integer, "null"], minimum: 0 }
+        score: { type: [number, "null"], minimum: 0, maximum: 1 }
+    AskUsage:
+      type: object
+      additionalProperties: false
+      required: [prompt_tokens, completion_tokens, total_tokens, estimated_cost]
+      properties:
+        prompt_tokens: { type: integer, minimum: 0 }
+        completion_tokens: { type: integer, minimum: 0 }
+        total_tokens: { type: integer, minimum: 0 }
+        estimated_cost: { type: [string, "null"], pattern: "^\\d+(\\.\\d{1,6})?$" }
+    ExecutionTrace:
+      type: object
+      additionalProperties: false
+      required: [status, steps, tool_calls]
+      properties:
+        status: { type: string, enum: [RUNNING, COMPLETED, FAILED, CANCELLED] }
+        steps: { type: array, items: { $ref: "#/components/schemas/TraceStep" } }
+        tool_calls: { type: array, items: { $ref: "#/components/schemas/TraceToolCall" } }
+    TraceStep:
+      type: object
+      additionalProperties: false
+      required: [step_id, step_name, status, duration_ms, error_code, error_message]
+      properties:
+        step_id: { type: string, format: uuid }
+        step_name: { type: string }
+        status: { type: string, enum: [RUNNING, COMPLETED, FAILED, CANCELLED] }
+        duration_ms: { type: [integer, "null"], minimum: 0 }
+        error_code: { type: [integer, "null"] }
+        error_message: { type: [string, "null"] }
+    TraceToolCall:
+      type: object
+      additionalProperties: false
+      required: [tool_call_id, tool_name, status, input_params, output, duration_ms, error_code, error_message]
+      properties:
+        tool_call_id: { type: string, format: uuid }
+        tool_name: { type: string }
+        status: { type: string, enum: [RUNNING, COMPLETED, FAILED, CANCELLED] }
+        input_params: { type: [object, "null"], additionalProperties: true }
+        output: { type: [object, "null"], additionalProperties: true }
+        duration_ms: { type: [integer, "null"], minimum: 0 }
+        error_code: { type: [integer, "null"] }
+        error_message: { type: [string, "null"] }
+    AgentRunDiagnosticResponse:
+      type: object
+      additionalProperties: false
+      required: [request_id, run_id, trace_id, conversation_id, user_id, task_type, status]
+      properties:
+        request_id: { type: string, format: uuid }
+        run_id: { type: string, format: uuid }
+        trace_id: { type: string, format: uuid }
+        conversation_id: { type: integer, format: int64, minimum: 1 }
+        user_id: { type: [integer, "null"], format: int64, minimum: 1 }
+        task_type: { type: string, enum: [knowledge_qa, retrieval, chitchat, reasoning] }
+        status: { type: string, enum: [RUNNING, COMPLETED, FAILED, CANCELLED] }
+    AgentRunStepsResponse:
+      type: object
+      additionalProperties: false
+      required: [run_id, steps]
+      properties:
+        run_id: { type: string, format: uuid }
+        steps: { type: array, items: { $ref: "#/components/schemas/TraceStep" } }
+    AgentRunToolCallsResponse:
+      type: object
+      additionalProperties: false
+      required: [run_id, tool_calls]
+      properties:
+        run_id: { type: string, format: uuid }
+        tool_calls: { type: array, items: { $ref: "#/components/schemas/TraceToolCall" } }
+    AskResponse:
+      type: object
+      additionalProperties: false
+      required: [answer, sources, task_type, run_id, trace_id, usage, execution_trace, mock]
+      properties:
+        answer: { type: string }
+        sources:
+          type: array
+          items: { $ref: "#/components/schemas/AskSource" }
+        task_type: { type: string, enum: [knowledge_qa, retrieval, chitchat, reasoning] }
+        run_id: { type: string, format: uuid }
+        trace_id: { type: string, format: uuid }
+        usage:
+          oneOf:
+            - $ref: "#/components/schemas/AskUsage"
+            - type: "null"
+        execution_trace: { $ref: "#/components/schemas/ExecutionTrace" }
+        mock:
+          type: boolean
+          description: True for stage-1 stubs; false for stage-6 knowledge_qa and chitchat routes.
+    InternalError:
+      type: object
+      additionalProperties: true
+      required: [detail]
+      properties:
+        detail: { type: string }
+    LivenessResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - status
+        - service
+        - timestamp
+        - mock
+      properties:
+        status:
+          type: string
+          enum:
+            - UP
+        service:
+          type: string
+          const: doctrail-python
+        timestamp:
+          type: string
+          format: date-time
+          description: UTC timestamp in RFC 3339 format.
+        mock:
+          type: boolean
+          description: True while the stage-1 endpoint is a contract stub.
+    ReadinessResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - status
+        - service
+        - timestamp
+        - mock
+        - checks
+      properties:
+        status:
+          type: string
+          enum:
+            - READY
+            - NOT_READY
+        service:
+          type: string
+          const: doctrail-python
+        timestamp:
+          type: string
+          format: date-time
+          description: UTC timestamp in RFC 3339 format.
+        mock:
+          type: boolean
+          description: True while readiness is supplied by a stage-1 stub.
+        checks:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/ReadinessCheck"
+    ReadinessCheck:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+        - status
+      properties:
+        name:
+          type: string
+          pattern: "^[a-z][a-z0-9_]*$"
+          description: Stable snake_case check name.
+        status:
+          type: string
+          enum:
+            - UP
+            - DOWN
+        detail:
+          type:
+            - string
+            - "null"
+          description: Non-sensitive diagnostic summary; never include secrets.

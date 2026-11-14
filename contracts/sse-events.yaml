@@ -1,0 +1,41 @@
+contract: doctrail-sse-events
+version: 1.0.0
+mediaType: text/event-stream;charset=UTF-8
+status: frozen-contract-runtime-not-implemented
+encoding:
+  separator: "\n\n"
+  eventLine: "event: <event-name>"
+  dataLine: "data: <JSON object>"
+events:
+  run_started:
+    required: [run_id, trace_id]
+  routed:
+    required: [task_type]
+  step_started:
+    required: [step_id, step_name]
+  step_completed:
+    required: [step_id, step_name, duration_ms]
+  step_failed:
+    required: [step_id, step_name, code, message]
+  tool_started:
+    required: [tool_call_id, tool_name]
+  tool_completed:
+    required: [tool_call_id, tool_name, duration_ms]
+  tool_failed:
+    required: [tool_call_id, tool_name, code, message]
+  sources:
+    required: [items]
+  token:
+    required: [text]
+  end:
+    required: [answer, sources, run_id]
+  error:
+    required: [code, message, retryable]
+rules:
+  - Exactly one end or one error terminates a request; they are mutually exclusive.
+  - token events may only occur before the terminal event.
+  - end.answer equals the concatenation of all token.text values.
+  - A client disconnect cancels the Python request and records CANCELLED.
+  - Partial text is never persisted as a successful assistant message.
+  - step_id and tool_call_id are idempotency keys for audit writes.
+  - Proxy buffering and caching must be disabled for this media type.

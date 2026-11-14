@@ -1,0 +1,13 @@
+{
+  "code": 1,
+  "msg": "success",
+  "data": {
+    "id": 901,
+    "conversationId": 42,
+    "role": "assistant",
+    "content": "这是基于当前知识库生成的回答。",
+    "createdAt": "2026-10-02T10:00:00Z",
+    "feedback": "up",
+    "mock": false
+  }
+}

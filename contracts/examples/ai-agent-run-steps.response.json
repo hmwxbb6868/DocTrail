@@ -1,0 +1,29 @@
+{
+  "run_id": "882b535f-36fe-4ab7-8468-e229674efa47",
+  "steps": [
+    {
+      "step_id": "ca830c17-1260-4b71-a5bb-95ea1293920c",
+      "step_name": "route_intent",
+      "status": "COMPLETED",
+      "duration_ms": 0,
+      "error_code": null,
+      "error_message": null
+    },
+    {
+      "step_id": "06f5cb48-9a84-4bf5-9a3c-2349c4f3bf48",
+      "step_name": "retrieve_active_faiss_chunks",
+      "status": "COMPLETED",
+      "duration_ms": 12,
+      "error_code": null,
+      "error_message": null
+    },
+    {
+      "step_id": "e19c61b5-6953-4a82-ae2e-319abacec01e",
+      "step_name": "generate_grounded_answer",
+      "status": "COMPLETED",
+      "duration_ms": 540,
+      "error_code": null,
+      "error_message": null
+    }
+  ]
+}

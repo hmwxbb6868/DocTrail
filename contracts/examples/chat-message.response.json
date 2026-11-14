@@ -1,0 +1,33 @@
+{
+  "code": 1,
+  "msg": "success",
+  "data": {
+    "answer": "根据正式知识库片段，TCP 通过三次握手建立连接。[网络基础示例.md#0]",
+    "sources": [{ "docId": 46, "docName": "网络基础示例.md", "page": null, "chunkIndex": 0, "score": 0.91 }],
+    "taskType": "knowledge_qa",
+    "runId": "882b535f-36fe-4ab7-8468-e229674efa47",
+    "traceId": "15fcdb04-b282-4c39-a51d-4fb7f948b43c",
+    "usage": null,
+    "executionTrace": {
+      "status": "COMPLETED",
+      "steps": [
+        { "stepId": "ca830c17-1260-4b71-a5bb-95ea1293920c", "stepName": "route_intent", "status": "COMPLETED", "durationMs": 0, "errorCode": null, "errorMessage": null },
+        { "stepId": "06f5cb48-9a84-4bf5-9a3c-2349c4f3bf48", "stepName": "retrieve_active_faiss_chunks", "status": "COMPLETED", "durationMs": 12, "errorCode": null, "errorMessage": null },
+        { "stepId": "e19c61b5-6953-4a82-ae2e-319abacec01e", "stepName": "generate_grounded_answer", "status": "COMPLETED", "durationMs": 540, "errorCode": null, "errorMessage": null }
+      ],
+      "toolCalls": [
+        {
+          "toolCallId": "6119ca13-b77e-48cc-966a-9dbd72ce9070",
+          "toolName": "retrieve_active_faiss_chunks",
+          "status": "COMPLETED",
+          "inputParams": { "length": 12, "limit": 5 },
+          "output": { "matches": 1, "documents": [46], "chunks": [101] },
+          "durationMs": 10,
+          "errorCode": null,
+          "errorMessage": null
+        }
+      ]
+    },
+    "mock": false
+  }
+}

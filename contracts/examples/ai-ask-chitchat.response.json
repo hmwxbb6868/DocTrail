@@ -1,0 +1,31 @@
+{
+  "answer": "你好！我是 DocTrail 知识助手，很高兴见到你。",
+  "sources": [],
+  "task_type": "chitchat",
+  "run_id": "d325c3ec-554d-413b-b11c-2a555f41759d",
+  "trace_id": "653c0ac6-0c4a-438e-8529-d1199a46f34e",
+  "usage": null,
+  "execution_trace": {
+    "status": "COMPLETED",
+    "steps": [
+      {
+        "step_id": "1fae9e8b-8c11-4c83-9693-8f4bfd9ea1da",
+        "step_name": "route_intent",
+        "status": "COMPLETED",
+        "duration_ms": 0,
+        "error_code": null,
+        "error_message": null
+      },
+      {
+        "step_id": "33d92c21-da52-4ed8-bbd0-a0430bdd70a8",
+        "step_name": "generate_chitchat_response",
+        "status": "COMPLETED",
+        "duration_ms": 0,
+        "error_code": null,
+        "error_message": null
+      }
+    ],
+    "tool_calls": []
+  },
+  "mock": false
+}
